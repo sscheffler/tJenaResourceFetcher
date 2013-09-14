@@ -1,0 +1,101 @@
+<%@ jet 
+imports="
+    org.talend.core.model.process.INode 
+    org.talend.designer.codegen.config.CodeGeneratorArgument
+    org.talend.core.model.process.ElementParameterParser 
+    org.talend.core.model.metadata.IMetadataTable
+    org.talend.core.model.metadata.IMetadataColumn 
+    org.talend.core.model.process.IConnection
+    java.util.List
+"
+%>
+
+<%
+	CodeGeneratorArgument codeGenArgument = (CodeGeneratorArgument) argument;
+	INode node = (INode)codeGenArgument.getArgument();
+	String cid = node.getUniqueName();
+	
+	//Managment-Strings
+	String connectionName = "store_"+ElementParameterParser.getValue(node, "__CONNECTION__");
+	String hostConnectionName = "host_"+ElementParameterParser.getValue(node, "__CONNECTION__");
+	String nameSpaceMapName = "nameSpaceMap_"+ElementParameterParser.getValue(node, "__CONNECTION__");
+	
+	//Data-Strings
+	String typeObject = ElementParameterParser.getValue(node, "__TYPE__");
+	
+	//Integer
+	String limit= ElementParameterParser.getValue(node, "__LIMIT_FIELD__");
+	String offset= ElementParameterParser.getValue(node, "__OFFSET_FIELD__");
+	
+	//Booleans
+	Boolean all=new Boolean(ElementParameterParser.getValue(node, "__ALL_RADIO__"));
+	Boolean include=new Boolean(ElementParameterParser.getValue(node, "__INCLUDE_RADIO__"));
+	Boolean exclude=new Boolean(ElementParameterParser.getValue(node, "__EXCLUDE_RADIO__"));
+	Boolean use_nsMap=new Boolean(ElementParameterParser.getValue(node, "__GLOBAL_CHECK__"));
+	Boolean verbose=new Boolean(ElementParameterParser.getValue(node, "__VERBOSE_CHECK__"));
+	Boolean limitBool=new Boolean(ElementParameterParser.getValue(node, "__LIMIT_CHECK__"));
+	Boolean offsetBool=new Boolean(ElementParameterParser.getValue(node, "__OFFSET_CHECK__"));
+	String outConnName = null;
+
+	List<? extends IConnection> outConns = node.getOutgoingConnections();	
+	
+	for(IConnection con : outConns){
+		String connectorName = con.getConnectorName();
+		String name=con.getName();
+		if(connectorName.equals("FLOW")){
+		%>
+		
+		
+		
+		com.hp.hpl.jena.query.QuerySolution sol_<%=cid%> = results_<%=cid%>.nextSolution();
+		String type_<%=cid%> = null;
+		<%
+		
+		for(IMetadataColumn column_<%=cid%> : con_<%=cid%>.getMetadataTable().getListColumns()){
+			String columnLabel_<%=cid%> = column_<%=cid%>.getLabel();
+			String columnId_<%=cid%> = column_<%=cid%>.getId();
+			
+		%>
+			com.hp.hpl.jena.rdf.model.RDFNode solNode_<%=cid%>_<%=columnId%>=sol_<%=cid%>.get("<%=columnLabel%>");
+			
+			String solNode_<%=cid%>_<%=columnId%>_String = null;
+			if("<%=columnLabel%>".equals("objectType")){
+				<%=name%>.<%=columnLabel%>=type;
+			}else{
+				//if node is Literal
+				if(solNode_<%=cid%>_<%=columnId%>.isLiteral()){  
+					solNode_<%=cid%>_<%=columnId%>_String= "\""+solNode_<%=cid%>_<%=columnId%>.asLiteral().getString()+"\"";
+					type_<%=cid%>="literal";
+				}
+				
+				//if node is URIResource or blank node
+				if(solNode_<%=cid%>_<%=columnId%>.isResource()){  
+					if(solNode_<%=cid%>_<%=columnId%>.isAnon()){
+						solNode_<%=cid%>_<%=columnId%>_String= solNode_<%=cid%>_<%=columnId%>.asResource().toString();
+						type_<%=cid%>="blank";
+					}else{
+						solNode_<%=cid%>_<%=columnId%>_String= "<"+solNode_<%=cid%>_<%=columnId%>.asResource().toString()+">";
+						type_<%=cid%>="uri";
+					}
+				}
+				
+				//handle resource limit
+				<%if(limitBool){%>
+					if(("<%=columnLabel%>".equals("subject"))
+						&&(!resourceID_<%=cid%>.equals(solNode_<%=cid%>_<%=columnId%>_String))){
+						resourceID_<%=cid%>=solNode_<%=cid%>_<%=columnId%>_String;
+						limitCount_<%=cid%>++;
+					}
+				<%}%>
+				if(solNode_<%=cid%>_<%=columnId%>!=null){
+					<%=name%>.<%=columnLabel%>= solNode_<%=cid%>_<%=columnId%>_String;
+				}else{
+					<%=name%>.<%=columnLabel%>=null;
+				}
+			}
+			
+		<%	
+			}
+			break;
+		}
+}%>

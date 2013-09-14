@@ -1,0 +1,175 @@
+<%@ jet 
+imports="
+    org.talend.core.model.process.INode 
+    org.talend.designer.codegen.config.CodeGeneratorArgument
+    org.talend.core.model.process.ElementParameterParser 
+    java.util.List
+    java.util.Map
+"
+%>
+
+<%@ include file="../templates/init/StandardInit.javajet"%>
+<%@ include file="../templates/semantic_web/jena/JenaUtils.javajet"%>
+
+<%
+	
+	//Managment-Strings
+	String connectionName = "store_"+ElementParameterParser.getValue(node, "__CONNECTION__");
+	String hostConnectionName = "host_"+ElementParameterParser.getValue(node, "__CONNECTION__");
+	String graphName = ElementParameterParser.getValue(node, "__GRAPH__");
+	String nameSpaceStringName = "prefixString_"+ElementParameterParser.getValue(node, "__CONNECTION__");
+	
+	String limit= ElementParameterParser.getValue(node, "__LIMIT_FIELD__");
+	String start_offset=ElementParameterParser.getValue(node, "__START_OFFSET_FIELD__");
+	String offset= ElementParameterParser.getValue(node, "__OFFSET_FIELD__");
+	
+	//Booleans
+	Boolean all=new Boolean(ElementParameterParser.getValue(node, "__ALL_RADIO__"));
+	Boolean include=new Boolean(ElementParameterParser.getValue(node, "__INCLUDE_RADIO__"));
+	Boolean exclude=new Boolean(ElementParameterParser.getValue(node, "__EXCLUDE_RADIO__"));
+	Boolean use_nsMap=new Boolean(ElementParameterParser.getValue(node, "__GLOBAL_CHECK__"));
+	Boolean verbose=new Boolean(ElementParameterParser.getValue(node, "__VERBOSE_CHECK__"));
+	Boolean limitBool=new Boolean(ElementParameterParser.getValue(node, "__LIMIT_CHECK__"));
+	Boolean offsetBool=new Boolean(ElementParameterParser.getValue(node, "__OFFSET_CHECK__"));
+	Boolean graphBool=new Boolean(ElementParameterParser.getValue(node, "__GRAPH_CHECK__"));
+	
+	//Tables
+	List<Map<String, String>> includeValues = (List<Map<String,String>>)ElementParameterParser.getObjectValue(node,"__INCLUDE_TABLE__");
+	List<Map<String, String>> typeValues = (List<Map<String,String>>)ElementParameterParser.getObjectValue(node,"__TYPE_TABLE__");
+	
+	if(verbose){%>
+		String globalString_<%=cid%>="global namespaces: " + <%=use_nsMap%>;
+		String limitString_<%=cid%>="limit: " + <%=limitBool%>;
+		String offsetString_<%=cid%>="offset: " + <%=offsetBool%>;
+		
+		<%if(limitBool){%>
+			limitString_<%=cid%> = limitString_<%=cid%>+" ( '"+<%=limit%>+"' )";
+		<%}
+		
+		if(offsetBool){%>
+			offsetString_<%=cid%> = offsetString_<%=cid%>+" ( '"+<%=offset%>+"' )";
+		<%}else{%>
+			offsetString_<%=cid%> = offsetString_<%=cid%>+" ( standard set to '100' )";
+		<%}
+	%>
+		System.out.println("Verbose Output");
+		System.out.println();
+		System.out.println("globalString");
+		System.out.println("limitString");
+		System.out.println("offsetString");
+	<%}%>
+	
+	//Initials
+	int offset_<%=cid%>=<%=offset%>;
+	int offset_value_<%=cid%>=<%=start_offset%>;
+	int limit_value_<%=cid%>=100;
+	com.hp.hpl.jena.query.QueryExecution qexec_<%=cid%>;
+	com.hp.hpl.jena.query.ResultSet results_<%=cid%>;
+	java.lang.StringBuilder builder_<%=cid%> = new java.lang.StringBuilder();
+	String host_<%=cid%> =(String)globalMap.get("<%=hostConnectionName%>");
+	
+	//Build namespaces for query
+	<%if(use_nsMap){%>
+		builder_<%=cid%>.append((String)globalMap.get("<%=nameSpaceStringName%>"));
+	<%}%>
+	
+	builder_<%=cid%>.append("Select ?subject ?predicate ?object {");
+	<%if(graphBool){%>
+		builder_<%=cid%>.append("GRAPH "+<%=graphName%>+" {");
+	<%}%>
+	
+	<%for(int i = 0; i< typeValues.size(); i++){
+		
+		if(i>0){
+		%>
+			builder_<%=cid%>.append("\n");
+			builder_<%=cid%>.append(" UNION ");
+		<%}
+			
+		java.util.Map<String,String> map = typeValues.get(i);
+		String type = map.get("TYPE_ITEM");
+	%>
+		builder_<%=cid%>.append("\n");
+		builder_<%=cid%>.append("{?subject <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> "+<%=type%>+".}");
+	<%}%>
+		
+	
+	//all triples per resource
+	<%if(all){%>
+		
+		builder_<%=cid%>.append("\n");
+		builder_<%=cid%>.append("?subject ?predicate ?object.");
+	<%}
+	
+	//selected triples per resource
+	if(include){%>
+		builder_<%=cid%>.append("{?subject ?predicate ?object. filter(?predicate in (");
+		<%for(int i = 0; i< includeValues.size(); i++){%>
+
+			<%java.util.Map<String,String> map = includeValues.get(i);
+			String pred = map.get("INC_PREDICATE_ITEM");
+			%>
+			builder_<%=cid%>.append(<%=pred%>);
+			
+			<%if(i<includeValues.size()-1){
+			%>
+			builder_<%=cid%>.append(", ");
+			<%}%>
+			
+		<%}%>
+		builder_<%=cid%>.append("))}	");
+	<%}
+	if(graphBool){%>
+		builder_<%=cid%>.append("}");
+	<%}%>
+	
+	
+	//Verbose Output
+	<%if(verbose){%>
+		System.out.println();
+		System.out.println("Query: ");
+		System.out.println(builder_<%=cid%>.toString());
+		System.out.println();
+		System.out.println("--Executing Query--");
+	<%}%>
+	
+	<%if(offsetBool){%>
+		limit_value_<%=cid%>=offset_<%=cid%>;
+	<%}%>	
+	
+	int limitCount_<%=cid%>=0;
+	String resourceID_<%=cid%>="";
+	boolean limitBreak_<%=cid%>=false;
+	
+	Boolean b = false;
+	
+	while(b){
+	
+		
+		
+		
+		if(limitBreak_<%=cid%>){
+			break;
+		}
+	
+		String queryString_<%=cid%> = builder_<%=cid%>.toString() + "} OFFSET " +offset_value_<%=cid%>+ " LIMIT " + limit_value_<%=cid%>;
+		qexec_<%=cid%> = com.hp.hpl.jena.query.QueryExecutionFactory.sparqlService(host_<%=cid%>+"query", queryString_<%=cid%>);
+		//qexec.setTimeout(1000);
+		results_<%=cid%>= qexec_<%=cid%>.execSelect();
+		if(!results_<%=cid%>.hasNext()){
+			break;
+		}
+		
+	
+		while(results_<%=cid%>.hasNext())
+		{
+	
+			//handle break condition for resource limit
+			<%if(limitBool){%>
+				if(limitCount_<%=cid%>==<%=limit%>){
+				limitBreak_<%=cid%>=true;
+				break;
+			}
+			<%}%>   
+
+					    
